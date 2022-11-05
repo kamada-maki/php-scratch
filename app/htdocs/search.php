@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+
 //データベース接続
 $username = "root";
 $password = "root";
@@ -12,6 +13,48 @@ $id = '';
 $nameKana = '';
 $gender = '';
 $whereSql = '';
+$param = [];
+$errorMessage = '';
+$successMessage = '';
+
+//POST送信かつ削除ボタン押下
+if (mb_strtolower($_SERVER["REQUEST_METHOD"]) === "post") {
+  $isDelete = (isset($_POST["delete"]) && $_POST["delete"] == 1) ? true : false;
+
+  if ($isDelete === true) {
+    //削除対象の社員ID
+    $deleteId = isset($_POST['id']) ? $_POST['id'] : '';
+    if ($deleteId === '') {
+      $errorMessage .= 'IDが不正です<br>';
+    } else if (!preg_match('/\A[0-9]{6}\z/', $deleteId)) {
+      $errorMessage .= 'IDが不正で-----す<br>';
+    } else {
+      //存在する社員番号か
+      $sql = "SELECT count(*) count  from users where id = :id";
+      $param = [":id" => $deleteId];
+      $stmt = $pdo->prepare($sql);
+      $stmt->execute($param);
+      $count = $stmt->fetch(PDO::FETCH_ASSOC);
+      if ($count['count'] === '0') {
+        $errorMessage .= 'IDは存在しません。<br>';
+      }
+    }
+    if ($errorMessage === '') {
+      //トランザクション開始
+      $pdo->beginTransaction();
+      //社員情報削除のSQL実行
+      $sql = "DELETE from users where id = :id";
+      $param = [":id" => $deleteId];
+      $stmt = $pdo->prepare($sql);
+      $stmt->execute($param);
+      //コミット
+      $pdo->commit();
+      $successMessage = "削除完了しました。";
+    } else {
+      echo $errorMessage;
+    }
+  }
+}
 $param = [];
 //検索条件が指定されている
 if (isset($_GET['id']) && isset($_GET['name_kana'])) {
@@ -101,6 +144,19 @@ $stmt->execute($param);
         </form>
       </div>
 
+      <?php //メッセージ表示 
+      ?>
+      <?php //例)社員番号が不正です。 
+      ?>
+      <?php if ($errorMessage !== '') { ?>
+        <p class="error_message"><?php echo $errorMessage; ?></p>
+      <?php } ?>
+      <?php //例)削除完了しました。 
+      ?>
+      <?php if ($successMessage !== '') { ?>
+        <p class="success_message"><?php echo $successMessage; ?></p>
+      <?php } ?>
+
       <?php //件数表示 
       ?>
       <div id="page_area">
@@ -142,7 +198,7 @@ $stmt->execute($param);
                   <td><?php echo htmlspecialchars($row["mail_address"]) ?></td>
                   <td class="button_area">
                     <button class="edit_button">編集</button>
-                    <button class="delete_button">削除</button>
+                    <button class="delete_button" onclick="deleteUser('<?php echo htmlspecialchars($row['id']) ?>')">削除</button>
                   </td>
                 </tr>
               <?php } ?>
@@ -153,6 +209,24 @@ $stmt->execute($param);
     </div>
   </div>
 
+  <form action="search.php" name="delete_form" method="POST">
+    <input type="hidden" name="id" value="" />
+    <input type="hidden" name="delete" value="1" />
+  </form>
+
+  <script>
+    //javascriptでform内のhidden項目[id]に社員番号をセットしてsubmitする
+    function deleteUser(id) {
+      //削除確認ダイアログ表示
+      if (!window.confirm('社員番号[' + id + ']を削除してよろしいですか?')) {
+        //キャンセルが押されたら処理終了
+        return false;
+      }
+      //OKが押されたら社員番号をhidden項目[id]に社員番号をセットしてsubmit
+      document.delete_form.id.value = id;
+      document.delete_form.submit();
+    }
+  </script>
 </body>
 
 </html>
